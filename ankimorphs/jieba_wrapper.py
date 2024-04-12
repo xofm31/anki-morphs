@@ -21,6 +21,14 @@ CJK_IDEOGRAPHS: str = (
     "\u4E00-\u9FFF"  # CJK Unified Ideographs
     "\u3400-\u4DBF"  # CJK Unified Ideographs Extension A
     "\uF900-\uFAFF"  # CJK Compatibility Ideographs
+    "\u3000-\u3002"  # CJK Space, Comma, Period
+    "\u300A-\u300F"  # CJK Title marks and Quotes
+    "\u22EF"         # Ellipsis
+    "\u2026"         # Another Ellipsis
+    "\u2E3A"         # Two em dash
+    "\-"             # Dash
+    "\.\?\!\,"       # ASCII punctutaion
+    "\uFF0C\uFF01\uFF1F\uFF1B\uFF1A\u3002" # CJK versions of ASCII punctuation)
 )
 if sys.maxunicode > 0xFFFF:
     CJK_IDEOGRAPHS += (
