@@ -8,7 +8,7 @@ from typing import Any
 
 from anki.cards import Card
 from anki.consts import CARD_TYPE_NEW, CardQueue
-from anki.models import FieldDict, ModelManager, NotetypeDict
+from anki.models import FieldDict, ModelManager, NotetypeDict, NotetypeId
 from anki.notes import Note
 from aqt import mw
 from aqt.operations import QueryOp
@@ -194,8 +194,18 @@ def _cache_anki_data(  # pylint:disable=too-many-locals, too-many-branches, too-
     morph_table_data: list[dict[str, Any]] = []
     card_morph_map_table_data: list[dict[str, Any]] = []
 
+    model_manager: ModelManager = mw.col.models
+    morph_table_dict = {}
+
     # We only want to cache the morphs on the note-filters that have 'read' enabled
     for config_filter in read_enabled_config_filters:
+
+        note_type_id: NotetypeId | None = mw.col.models.id_for_name(config_filter.note_type)
+        note_type_dict = model_manager.get(note_type_id)
+        assert note_type_dict is not None
+        note_type_field_name_dict: dict[str, tuple[int, FieldDict]] = (
+            model_manager.field_map(note_type_dict)
+        )
 
         cards_data_dict: dict[int, AnkiCardData] = (
             anki_data_utils.create_card_data_dict(
@@ -298,15 +308,21 @@ def _cache_anki_data(  # pylint:disable=too-many-locals, too-many-branches, too-
             if card_data.morphs is None:
                 continue
 
+            focus_morph_index: int = note_type_field_name_dict[ankimorphs_globals.EXTRA_FIELD_UNKNOWNS][0]
+#            focus_morph = note.fields[focus_morph_index]
+            focus_morph = "ABC"
+
             for morph in card_data.morphs:
-                morph_table_data.append(
-                    {
-                        "lemma": morph.lemma,
-                        "inflection": morph.inflection,
-                        "highest_learning_interval": highest_interval,
-                    }
-                )
-                card_morph_map_table_data.append(
+                 key = (morph.lemma, morph.inflection)
+                 if key not in morph_table_dict:
+                     morph_table_dict[key] = {"focus": 0, "nonfocus": 0}
+#                 if morph.lemma==card_data.focus_morph:
+                 if morph.lemma==focus_morph:
+                     morph_table_dict[key]['focus'] = max(morph_table_dict[key]['focus'], highest_interval)
+                 else:
+                     morph_table_dict[key]['nonfocus'] = max(morph_table_dict[key]['nonfocus'], highest_interval)
+
+                 card_morph_map_table_data.append(
                     {
                         "card_id": card_id,
                         "morph_lemma": morph.lemma,
@@ -319,6 +335,23 @@ def _cache_anki_data(  # pylint:disable=too-many-locals, too-many-branches, too-
         morphs_from_files = _get_morphs_from_files(am_config)
 
     mw.taskman.run_on_main(partial(mw.progress.update, label="Saving to ankimorphs.db"))
+
+    # populate morph_table_data:
+    # for each morph, if there is a card that has that has the focus morph, use that value
+    for key, value in morph_table_dict.items():
+        lemma = key[0]
+        inflection = key[1]
+        if morph_table_dict[key]['focus'] > 0:
+            interval = morph_table_dict[key]['focus']
+        else:
+            interval = morph_table_dict[key]['nonfocus']
+        morph_table_data.append(
+            {
+                "lemma": lemma,
+                "inflection": inflection,
+                "highest_learning_interval": interval,
+            }
+        )
 
     am_db.insert_many_into_morph_table(morph_table_data + morphs_from_files)
     am_db.insert_many_into_card_table(card_table_data)
